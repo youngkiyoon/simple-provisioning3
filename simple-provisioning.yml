@@ -23,3 +23,47 @@
         Name: "{{ vpc_name }}"
       tenancy: default
     register: result_vpc
+    
+  - name: Create subnet 
+    ec2_vpc_subnet:
+      state: present
+      region: "{{ aws_region }}"
+      vpc_id: "{{ result_vpc.vpc.id }}"
+      cidr: "{{ subnet_cidr_block }}"
+      tags:
+        Name: Webserver Subnet
+    register: result_subnet
+    
+  - name: Create igw  
+    ec2_vpc_igw:
+      region: "{{ aws_region }}"
+      vpc_id: "{{ result_vpc.vpc.id }}"
+      state: present
+    register: result_igw
+    
+  - name: Set up public subnet route table
+    ec2_vpc_route_table:
+      vpc_id: "{{ result_vpc.vpc.id }}"
+      region: "{{ aws_region }}"
+      tags:
+        Name: Public
+      subnets:
+        - "{{ result_subnet.subnet.id }}"
+      routes:
+        - dest: 0.0.0.0/0
+          gateway_id: "{{ result_igw.gateway_id }}"
+    register: result_rout_table
+        
+  - name: Create security group 
+    ec2_group:
+      name: Public-SG
+      description: sg with rule descriptions
+      vpc_id: "{{ result_vpc.vpc.id }}"
+      region: "{{ aws_region }}"
+      rules:
+        - proto: tcp
+          ports:
+          - 80
+          - 22
+          cidr_ip: 0.0.0.0/0
+          rule_desc: allow all on port 80
